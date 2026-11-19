@@ -18,6 +18,66 @@
   const STORAGE_AVATAR_SIZE = 'agy_avatar_size_v3';
   const STORAGE_AVATAR_RADIUS = 'agy_avatar_radius_v3';
   const STORAGE_PERF_MODE = 'agy_perf_mode_v3';
+  const STORAGE_INPUT_OPACITY = 'agy_input_opacity_v3';
+  const STORAGE_USER_BUBBLE_OPACITY = 'agy_user_bubble_opacity_v3';
+  const STORAGE_AI_BUBBLE_OPACITY = 'agy_ai_bubble_opacity_v3';
+
+  function parseOptionalPct(raw) {
+    if (raw === undefined || raw === null || raw === '' || raw === 'null') return null;
+    const n = parseInt(String(raw), 10);
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
+  }
+
+  function getMeanCssAlphaPct(cssBg, fallbackPct = 70) {
+    if (!cssBg || typeof cssBg !== 'string') return fallbackPct;
+    const re = /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9]*\.?[0-9]+)\s*\)/gi;
+    const vals = [];
+    let m;
+    while ((m = re.exec(cssBg)) !== null) {
+      const a = parseFloat(m[1]);
+      if (Number.isFinite(a)) vals.push(Math.min(1, Math.max(0, a)));
+    }
+    if (!vals.length) return fallbackPct;
+    return Math.round((vals.reduce((acc, v) => acc + v, 0) / vals.length) * 100);
+  }
+
+  function scaleCssBgAlpha(cssBg, targetPct) {
+    if (!cssBg || typeof cssBg !== 'string' || targetPct === null || targetPct === undefined) return cssBg;
+    const re = /rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9]*\.?[0-9]+)\s*\)/gi;
+    const alphas = [];
+    let m;
+    while ((m = re.exec(cssBg)) !== null) {
+      const a = parseFloat(m[4]);
+      if (Number.isFinite(a)) alphas.push(Math.min(1, Math.max(0, a)));
+    }
+    if (!alphas.length) return cssBg;
+    const targetA = Math.min(1, Math.max(0, targetPct / 100));
+    const meanA = alphas.reduce((acc, v) => acc + v, 0) / alphas.length;
+    const spanScale = (targetA <= 0.001 || targetA >= 0.999)
+      ? 0
+      : Math.min(
+          1,
+          meanA > 0.001 ? targetA / meanA : 1,
+          (1 - meanA) > 0.001 ? (1 - targetA) / (1 - meanA) : 1
+        );
+    return cssBg.replace(re, (_full, r, g, b, aStr) => {
+      const a = parseFloat(aStr);
+      const nextA = targetA <= 0.001
+        ? 0
+        : targetA >= 0.999
+        ? 1
+        : Math.min(1, Math.max(0, targetA + (a - meanA) * spanScale));
+      return `rgba(${r}, ${g}, ${b}, ${Number(nextA.toFixed(3))})`;
+    });
+  }
+
+  function getRawInputCardBg(bubbleTheme, inputStyle) {
+    return inputStyle === 'glass'
+      ? (bubbleTheme.inputGlassBg || 'rgba(20, 15, 13, 0.52)')
+      : inputStyle === 'double_gold'
+      ? 'linear-gradient(145deg, rgba(44, 28, 20, 0.90) 0%, rgba(24, 15, 12, 0.92) 100%)'
+      : (bubbleTheme.inputCardBg || 'rgba(28, 19, 16, 0.88)');
+  }
 
   function resolveAssetUrl(raw) {
     if (!raw || typeof raw !== 'string') return '';
@@ -77,7 +137,10 @@
     const avatarRadius = rawAvRad !== undefined && rawAvRad !== null && rawAvRad !== '' ? parseInt(rawAvRad, 10) : 50;
     const rawPerf = localStorage.getItem(STORAGE_PERF_MODE) || init.performanceMode || DEFAULT_PERF_MODE;
     const performanceMode = rawPerf === 'lite' ? 'lite' : 'ultra';
-    return { themeName, bubbleName, inputStyle, dimming, wpEnabled, customWp, userAvatar, agentAvatar, glassBlur, avatarSize, avatarRadius, performanceMode };
+    const inputOpacity = parseOptionalPct(localStorage.getItem(STORAGE_INPUT_OPACITY) ?? init.inputOpacity);
+    const userBubbleOpacity = parseOptionalPct(localStorage.getItem(STORAGE_USER_BUBBLE_OPACITY) ?? init.userBubbleOpacity);
+    const aiBubbleOpacity = parseOptionalPct(localStorage.getItem(STORAGE_AI_BUBBLE_OPACITY) ?? init.aiBubbleOpacity);
+    return { themeName, bubbleName, inputStyle, dimming, wpEnabled, customWp, userAvatar, agentAvatar, glassBlur, avatarSize, avatarRadius, performanceMode, inputOpacity, userBubbleOpacity, aiBubbleOpacity };
   }
 
   // Downscale user/agent avatar uploads to 192x192 WebP once so theme_config.json stays tiny
@@ -2590,6 +2653,18 @@
       if (overrides.avatarRadius !== undefined) {
         localStorage.setItem(STORAGE_AVATAR_RADIUS, String(overrides.avatarRadius));
       }
+      if (overrides.inputOpacity !== undefined) {
+        if (overrides.inputOpacity === null) localStorage.removeItem(STORAGE_INPUT_OPACITY);
+        else localStorage.setItem(STORAGE_INPUT_OPACITY, String(overrides.inputOpacity));
+      }
+      if (overrides.userBubbleOpacity !== undefined) {
+        if (overrides.userBubbleOpacity === null) localStorage.removeItem(STORAGE_USER_BUBBLE_OPACITY);
+        else localStorage.setItem(STORAGE_USER_BUBBLE_OPACITY, String(overrides.userBubbleOpacity));
+      }
+      if (overrides.aiBubbleOpacity !== undefined) {
+        if (overrides.aiBubbleOpacity === null) localStorage.removeItem(STORAGE_AI_BUBBLE_OPACITY);
+        else localStorage.setItem(STORAGE_AI_BUBBLE_OPACITY, String(overrides.aiBubbleOpacity));
+      }
     } catch (e) {}
 
     if (window.agySaveThemeConfig) {
@@ -2849,12 +2924,13 @@
       .surface-composer::after { display: none !important; }
     `;
 
-    const inputCardBg =
-      st.inputStyle === 'glass'
-        ? (bubbleTheme.inputGlassBg || 'rgba(20, 15, 13, 0.52)')
-        : st.inputStyle === 'double_gold'
-        ? 'linear-gradient(145deg, rgba(44, 28, 20, 0.90) 0%, rgba(24, 15, 12, 0.92) 100%)'
-        : (bubbleTheme.inputCardBg || 'rgba(28, 19, 16, 0.88)');
+    const rawInputCardBg = getRawInputCardBg(bubbleTheme, st.inputStyle);
+    const inputCardBg = scaleCssBgAlpha(rawInputCardBg, st.inputOpacity);
+    const effInputOp = st.inputOpacity !== null ? st.inputOpacity : getMeanCssAlphaPct(rawInputCardBg, 56);
+    const userBubbleBg = scaleCssBgAlpha(bubbleTheme.bg, st.userBubbleOpacity);
+    const effUserOp = st.userBubbleOpacity !== null ? st.userBubbleOpacity : getMeanCssAlphaPct(bubbleTheme.bg, 68);
+    const aiCardBgEffective = mainTheme.aiCardBg ? scaleCssBgAlpha(mainTheme.aiCardBg, st.aiBubbleOpacity) : '';
+    const effAiOp = st.aiBubbleOpacity !== null ? st.aiBubbleOpacity : getMeanCssAlphaPct(mainTheme.aiCardBg, 76);
 
     const inputOuterBorder =
       st.inputStyle === 'double_gold'
@@ -2964,13 +3040,14 @@
     const aiCardCss = mainTheme.aiCardBg ? `
       /* Translucent reading card for AI responses (zero live backdrop-filter for max 120fps scroll) */
       .agy-shell [data-testid="agent-response"] {
-        background: ${mainTheme.aiCardBg} !important;
+        background: ${aiCardBgEffective} !important;
         ${isLight ? `color: ${uiInk} !important;` : ''}
+        ${!isLight && effAiOp < 45 ? 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.88);' : ''}
         backdrop-filter: none !important;
         border: 1px solid ${mainTheme.aiCardBorder || (isLight ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.1)')} !important;
         border-radius: 14px !important;
         padding: 12px 16px !important;
-        box-shadow: ${isLight ? '0 4px 14px rgba(15, 23, 42, 0.08)' : '0 4px 14px rgba(0, 0, 0, 0.28)'} !important;
+        box-shadow: ${effAiOp <= 5 ? 'none' : (isLight ? '0 4px 14px rgba(15, 23, 42, 0.08)' : '0 4px 14px rgba(0, 0, 0, 0.28)')} !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
       }
@@ -3309,13 +3386,14 @@
       }
 
       .agy-user-bubble {
-        background: ${bubbleTheme.bg} !important;
+        background: ${userBubbleBg} !important;
         border-radius: ${bubbleTheme.isScroll ? '5px' : '13px'} !important;
         padding: 8px 16px !important;
         color: ${bubbleTheme.textColor} !important;
         border: ${innerBubbleBorder} !important;
         overflow: visible !important;
         font-weight: 450 !important;
+        ${!isLight && effUserOp < 45 ? 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.88) !important;' : ''}
       }
 
       .agy-user-bubble * {
@@ -3333,7 +3411,7 @@
         backdrop-filter: none !important;
       }
       .agy-user-bubble {
-        background: ${bubbleTheme.bg} !important;
+        background: ${userBubbleBg} !important;
         backdrop-filter: none !important;
         border: 1px solid rgba(248, 250, 252, 0.16) !important;
         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.88) !important;
@@ -3356,6 +3434,7 @@
 
       .surface-composer-card {
         background: ${inputCardBg} !important;
+        ${!isLight && effInputOp < 35 ? 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.88);' : ''}
         backdrop-filter: none !important;
         border-radius: 14.5px !important;
         border: ${bubbleTheme.innerBorder || '1px solid rgba(255, 255, 255, 0.07)'} !important;
@@ -3571,6 +3650,10 @@
   function renderThemePanels(container) {
     const st = getState();
     const mainTheme = THEMES[st.themeName] || THEMES[DEFAULT_THEME_KEY];
+    const bubbleTheme = THEMES[st.bubbleName] || mainTheme;
+    const initInputOp = st.inputOpacity !== null ? st.inputOpacity : getMeanCssAlphaPct(getRawInputCardBg(bubbleTheme, st.inputStyle), 56);
+    const initUserOp = st.userBubbleOpacity !== null ? st.userBubbleOpacity : getMeanCssAlphaPct(bubbleTheme.bg, 68);
+    const initAiOp = st.aiBubbleOpacity !== null ? st.aiBubbleOpacity : getMeanCssAlphaPct(mainTheme.aiCardBg, 76);
     const effUserAv = resolveAssetUrl(st.userAvatar === 'none' ? '' : (st.userAvatar || mainTheme.userAvatar || ''));
     const effAgentAv = resolveAssetUrl(st.agentAvatar === 'none' ? '' : (st.agentAvatar || mainTheme.agentAvatar || ''));
     const perfModes = [
@@ -3585,7 +3668,7 @@
       {
         mode: 'lite',
         title: 'Lite (Low-End PC)',
-        desc: 'Crisp static 1080p backdrop, 1-shot static VFX, 0 idle rAF loops, smooth iOS tab glide (~25–40 MB).',
+        desc: 'Crisp static 1080p backdrop, 1-shot static VFX, 0 idle rAF loops, smooth iOS tab glide (~10–30 MB).',
         extra: ''
       }
     ];
@@ -3659,6 +3742,39 @@
               <span id="agy-import-msg" style="font-size: 12px; color: #fca5a5;"></span>
               <button id="agy-import-apply" type="button" style="padding: 5px 12px; border-radius: 7px; background: ${mainTheme.primary}; color: #090d16; font-weight: 600; font-size: 12px; border: none; cursor: pointer;">Apply JSON</button>
             </div>
+          </div>
+        </div>
+
+        <div style="border: 1px solid ${mainTheme.borderColor}; background: ${mainTheme.cardBg || 'rgba(22, 16, 14, 0.72)'}; border-radius: 12px; padding: 14px 20px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 600; color: #f4f4f5; margin-bottom: 2px;">Chat Surface Opacity</div>
+              <div style="font-size: 12px; color: #a1a1aa;">Adjust background opacity of the chat input box, your chat bubble, and AI responses (0% = fully transparent, 100% = solid).</div>
+            </div>
+            <button id="agy-op-default-btn" type="button" style="padding: 4px 10px; border-radius: 7px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.16); color: #d4d4d8; font-size: 11.5px; cursor: pointer; white-space: nowrap;">Default</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.07);">
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #d4d4d8;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Chat Input</span>
+                <span id="agy-op-input-val" style="color: ${mainTheme.primary}; font-weight: 600;">${initInputOp}%</span>
+              </div>
+              <input id="agy-op-input" type="range" min="0" max="100" value="${initInputOp}" style="width: 100%; cursor: pointer; accent-color: ${mainTheme.primary}; height: 5px;" />
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #d4d4d8;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>User Chat Bubble</span>
+                <span id="agy-op-user-val" style="color: ${mainTheme.primary}; font-weight: 600;">${initUserOp}%</span>
+              </div>
+              <input id="agy-op-user" type="range" min="0" max="100" value="${initUserOp}" style="width: 100%; cursor: pointer; accent-color: ${mainTheme.primary}; height: 5px;" />
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #d4d4d8;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>AI Chat Bubble</span>
+                <span id="agy-op-ai-val" style="color: ${mainTheme.primary}; font-weight: 600;">${initAiOp}%</span>
+              </div>
+              <input id="agy-op-ai" type="range" min="0" max="100" value="${initAiOp}" style="width: 100%; cursor: pointer; accent-color: ${mainTheme.primary}; height: 5px;" />
+            </label>
           </div>
         </div>
 
@@ -3952,6 +4068,57 @@
       });
     }
 
+    const opInputSlider = container.querySelector('#agy-op-input');
+    const opInputVal = container.querySelector('#agy-op-input-val');
+    const opUserSlider = container.querySelector('#agy-op-user');
+    const opUserVal = container.querySelector('#agy-op-user-val');
+    const opAiSlider = container.querySelector('#agy-op-ai');
+    const opAiVal = container.querySelector('#agy-op-ai-val');
+    const opDefaultBtn = container.querySelector('#agy-op-default-btn');
+
+    const syncOpacitySlidersToState = () => {
+      const cur = getState();
+      const curMain = THEMES[cur.themeName] || THEMES[DEFAULT_THEME_KEY];
+      const curBubble = THEMES[cur.bubbleName] || curMain;
+      const inVal = cur.inputOpacity !== null ? cur.inputOpacity : getMeanCssAlphaPct(getRawInputCardBg(curBubble, cur.inputStyle), 56);
+      const uVal = cur.userBubbleOpacity !== null ? cur.userBubbleOpacity : getMeanCssAlphaPct(curBubble.bg, 68);
+      const aVal = cur.aiBubbleOpacity !== null ? cur.aiBubbleOpacity : getMeanCssAlphaPct(curMain.aiCardBg, 76);
+      if (opInputSlider) opInputSlider.value = inVal;
+      if (opInputVal) opInputVal.textContent = inVal + '%';
+      if (opUserSlider) opUserSlider.value = uVal;
+      if (opUserVal) opUserVal.textContent = uVal + '%';
+      if (opAiSlider) opAiSlider.value = aVal;
+      if (opAiVal) opAiVal.textContent = aVal + '%';
+    };
+
+    if (opInputSlider) {
+      opInputSlider.addEventListener('input', (e) => {
+        const v = parseInt(e.target.value, 10);
+        if (opInputVal) opInputVal.textContent = v + '%';
+        applyTheme({ inputOpacity: v });
+      });
+    }
+    if (opUserSlider) {
+      opUserSlider.addEventListener('input', (e) => {
+        const v = parseInt(e.target.value, 10);
+        if (opUserVal) opUserVal.textContent = v + '%';
+        applyTheme({ userBubbleOpacity: v });
+      });
+    }
+    if (opAiSlider) {
+      opAiSlider.addEventListener('input', (e) => {
+        const v = parseInt(e.target.value, 10);
+        if (opAiVal) opAiVal.textContent = v + '%';
+        applyTheme({ aiBubbleOpacity: v });
+      });
+    }
+    if (opDefaultBtn) {
+      opDefaultBtn.addEventListener('click', () => {
+        applyTheme({ inputOpacity: null, userBubbleOpacity: null, aiBubbleOpacity: null });
+        syncOpacitySlidersToState();
+      });
+    }
+
     const exportBtn = container.querySelector('#agy-export-btn');
     const importToggle = container.querySelector('#agy-import-toggle');
     const importBox = container.querySelector('#agy-import-box');
@@ -3994,7 +4161,7 @@
             throw new Error('Config must be a JSON object');
           }
           const allowed = {};
-          const keys = ['themeName', 'bubbleName', 'inputStyle', 'dimming', 'wpEnabled', 'customWp', 'userAvatar', 'agentAvatar', 'glassBlur', 'avatarSize', 'avatarRadius', 'performanceMode'];
+          const keys = ['themeName', 'bubbleName', 'inputStyle', 'dimming', 'wpEnabled', 'customWp', 'userAvatar', 'agentAvatar', 'glassBlur', 'avatarSize', 'avatarRadius', 'performanceMode', 'inputOpacity', 'userBubbleOpacity', 'aiBubbleOpacity'];
           keys.forEach((k) => {
             if (parsed[k] !== undefined) allowed[k] = parsed[k];
           });
@@ -4042,6 +4209,9 @@
       localStorage.removeItem(STORAGE_DIMMING);
       localStorage.removeItem(STORAGE_WP_ENABLED);
       localStorage.removeItem(STORAGE_PERF_MODE);
+      localStorage.removeItem(STORAGE_INPUT_OPACITY);
+      localStorage.removeItem(STORAGE_USER_BUBBLE_OPACITY);
+      localStorage.removeItem(STORAGE_AI_BUBBLE_OPACITY);
       applyTheme({
         themeName: DEFAULT_THEME_KEY,
         bubbleName: DEFAULT_THEME_KEY,
@@ -4054,9 +4224,13 @@
         glassBlur: 3,
         avatarSize: 32,
         avatarRadius: 50,
-        performanceMode: DEFAULT_PERF_MODE
+        performanceMode: DEFAULT_PERF_MODE,
+        inputOpacity: null,
+        userBubbleOpacity: null,
+        aiBubbleOpacity: null
       });
       syncPerfCards(DEFAULT_PERF_MODE);
+      syncOpacitySlidersToState();
       const defTh = THEMES[DEFAULT_THEME_KEY] || {};
       syncAvPreview(userAvPreview, resolveAssetUrl(defTh.userAvatar || ''), 'U');
       syncAvPreview(agentAvPreview, resolveAssetUrl(defTh.agentAvatar || ''), 'AI');
@@ -4116,6 +4290,7 @@
         });
 
         updateInputPreviews(name);
+        syncOpacitySlidersToState();
       });
     });
 
@@ -4133,13 +4308,14 @@
         });
 
         updateInputPreviews(name);
+        syncOpacitySlidersToState();
       });
     });
 
     container.querySelectorAll('.agy-input-card').forEach(card => {
       card.addEventListener('click', () => {
         const styleKey = card.dataset.style;
-        applyTheme({ inputStyle: styleKey });
+        applyTheme({ inputStyle: styleKey, inputOpacity: null });
 
         container.querySelectorAll('.agy-input-card').forEach(c => {
           const isSel = c.dataset.style === styleKey;
@@ -4148,6 +4324,8 @@
           const slot = c.querySelector('.agy-card-check-slot');
           if (slot) slot.innerHTML = isSel ? CHECK_SVG : '';
         });
+
+        syncOpacitySlidersToState();
       });
     });
   }
