@@ -14,14 +14,14 @@ Turn any wallpaper, aesthetic mood, or color palette into a live, 60fps custom t
   - `WLOP Cosmic` — 2K starlight wallpaper + custom SVG flourishes (`themes/assets/wlop_cosmic_2k.webp`)
   - `Midnight Obsidian` — Ultra-light zero-image pure-CSS gradient preset
 - **Data/Engine Separation:** Add your own themes solely inside `themes/themes.json` + `themes/assets/` and compile via `scripts/build_payload.py`.
-- **Cross-Platform Daemon (`daemon/theme_daemon.js`):** Windows, macOS, and Linux support using Node >= 22 built-in `WebSocket`, bounded `--max-old-space-size=48` heap, and local lazy asset streaming (`http://127.0.0.1:<port>`).
+- **Ultra-Light Native Windows Daemon (`daemon/agy_theme_daemon.exe`, ~1.4 MB RAM) + Cross-Platform Fallback (`daemon/theme_daemon.js`):** On Windows, ships a standalone zero-dependency Win32 C++ daemon (~0.8–1.4 MB RAM, **no Node.js required**); macOS and Linux use `daemon/theme_daemon.js` (Node >= 22) with local lazy asset streaming (`http://127.0.0.1:<port>`).
 
 ## Download Ready-to-Use Releases
 
 Download the pre-built package that fits your machine from [**GitHub Releases**](https://github.com/wwm100107-creator/antigravity-silver-ink-theme/releases/latest):
 
-- **[Antigravity-SilverInk-Ultra.zip](https://github.com/wwm100107-creator/antigravity-silver-ink-theme/releases/latest/download/Antigravity-SilverInk-Ultra.zip)** (`~32.8 MB`) — High-End PC: 60 FPS live video wallpaper, eye-tracking, full 60 FPS canvas VFX & iOS tab glide
-- **[Antigravity-SilverInk-Lite.zip](https://github.com/wwm100107-creator/antigravity-silver-ink-theme/releases/latest/download/Antigravity-SilverInk-Lite.zip)** (`~1.65 MB`) — Low-End / Eco RAM PC: Crisp 1080p static wallpaper, 1-shot crisp VFX (`0` idle `rAF` loops) & iOS tab glide
+- **[Antigravity-SilverInk-Ultra.zip](https://github.com/wwm100107-creator/antigravity-silver-ink-theme/releases/latest/download/Antigravity-SilverInk-Ultra.zip)** (`~32.7 MB`) — High-End PC: 60 FPS live video wallpaper (pre-baked sharpness, low-DPB H.264), eye-tracking, full 60 FPS canvas VFX & iOS tab glide
+- **[Antigravity-SilverInk-Lite.zip](https://github.com/wwm100107-creator/antigravity-silver-ink-theme/releases/latest/download/Antigravity-SilverInk-Lite.zip)** (`~1.75 MB`) — Low-End / Eco RAM PC: Crisp 1080p static wallpaper, 1-shot crisp VFX (`0` idle `rAF` loops) & iOS tab glide
 
 ## Dual Editions: Ultra vs Lite
 
@@ -29,13 +29,13 @@ You can switch between **Ultra** and **Lite** live anytime inside **Custom Theme
 
 | Feature / Resource | **Ultra Edition (High-End PC)** | **Lite Edition (Low-End / Eco RAM)** |
 |---|---|---|
-| **Background** | 60 FPS Live Video Wallpaper | Crisp 1080p Static WebP (`ink_starlight_lite_1080p.webp`) |
+| **Background** | 60 FPS Live Video Wallpaper (pre-baked H.264, zero live SVG filter) | Crisp 1080p Static WebP (`ink_starlight_lite_1080p.webp`) |
 | **Interactive Gaze** | Real-time Eye-Tracking & Blink Sync | Disabled (0 CPU/GPU idle overhead) |
 | **UI & Composer VFX** | 60 FPS animated (`1B`, `2F`, `3B-1`, `4A-2`, Composer & Avatars) | Crisp **1-shot static canvas VFX** (`0` idle `rAF` loops) |
 | **Sidebar Tab Switch** | iOS GPU-Composited Glide Pill | iOS GPU-Composited Glide Pill (identical!) |
 | **Viewport Virtualization** | Off-screen canvases unmounted beyond `viewport ± 440px` | Off-screen canvases unmounted beyond `viewport ± 440px` |
-| **Estimated Extra RAM** | Optimized GPU + Daemon (`~28–35 MB` Node daemon) | Minimal static buffers (`~25–40 MB` total overhead) |
-| **Community ZIP Size** | `~32.8 MB` (`Antigravity-SilverInk-Ultra.zip`) | `~1.65 MB` (`Antigravity-SilverInk-Lite.zip`) |
+| **Windows Background Daemon** | Native C++ `agy_theme_daemon.exe` (`~1.4 MB` Private / `0.8 MB` WS) | Native C++ `agy_theme_daemon.exe` (`~1.4 MB` Private / `0.8 MB` WS) |
+| **Community ZIP Size** | `~32.7 MB` (`Antigravity-SilverInk-Ultra.zip`) | `~1.75 MB` (`Antigravity-SilverInk-Lite.zip`) |
 
 ### Package Both Community Releases
 
@@ -50,8 +50,9 @@ Outputs ready-to-share folders & `.zip` archives under gitignored `releases/`:
 ## Prerequisites
 
 - **Antigravity** running with CDP debugging port active (`DevToolsActivePort`)
-- **Node.js >= 22** (uses native `globalThis.WebSocket`, zero `npm install` needed)
-- **Python 3.9+** (only needed when rebuilding presets; release ZIPs ship with `dist/theme_payload.js` pre-built)
+- **Windows:** **Zero extra runtimes required** for release ZIPs (bundled `daemon/agy_theme_daemon.exe` runs natively in ~1.4 MB RAM)
+- **macOS / Linux:** **Node.js >= 22** (uses native `globalThis.WebSocket`, zero `npm install` needed)
+- **Python 3.9+** (only needed when rebuilding presets from source; release ZIPs ship with `dist/theme_payload.js` pre-built)
 
 ## Quick Start
 

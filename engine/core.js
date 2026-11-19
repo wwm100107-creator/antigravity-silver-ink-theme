@@ -132,6 +132,7 @@
       try {
         const w = 640;
         const h = Math.max(180, Math.round((img.naturalHeight || 1440) * (w / (img.naturalWidth || 2560))));
+        window.__AGY_GLASS_ASPECT__ = w / h;
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
@@ -156,7 +157,10 @@
         }
         cache[key] = baked;
         const curShell = document.querySelector('.agy-shell');
-        if (curShell) curShell.style.setProperty('--agy-l-glass-bg', 'url("' + baked + '")');
+        if (curShell) {
+          curShell.style.setProperty('--agy-l-glass-bg', 'url("' + baked + '")');
+          if (typeof syncShellMetrics === 'function') syncShellMetrics();
+        }
       } catch (e) {}
     };
     img.src = wpUrl;
@@ -193,19 +197,13 @@
     if (!videoUrl) return;
 
     let layer = document.getElementById('agy-custom-theme-video-layer');
-    if (!layer || layer.parentElement !== shell || !layer.querySelector('#agy-custom-theme-eye-canvas') || !layer.querySelector('video[crossorigin="anonymous"]')) {
+    if (!layer || layer.parentElement !== shell || !layer.querySelector('#agy-custom-theme-eye-canvas') || !layer.querySelector('video[crossorigin="anonymous"]') || layer.querySelector('#agy-custom-theme-video-scrim') || layer.querySelector('#agy-4k-sharpen')) {
       releaseVideoLayer(shell);
       layer = document.createElement('figure');
       layer.id = 'agy-custom-theme-video-layer';
       layer.innerHTML = `
-        <svg width="0" height="0" style="position:absolute;pointer-events:none;">
-          <filter id="agy-4k-sharpen" color-interpolation-filters="sRGB">
-            <feConvolveMatrix order="3" kernelMatrix="0 -0.22 0 -0.22 1.88 -0.22 0 -0.22 0" preserveAlpha="true"/>
-          </filter>
-        </svg>
         <video id="agy-custom-theme-video" crossorigin="anonymous" autoplay loop muted playsinline></video>
         <canvas id="agy-custom-theme-eye-canvas" width="1370" height="330"></canvas>
-        <span id="agy-custom-theme-video-scrim"></span>
       `;
       shell.insertBefore(layer, shell.firstChild);
     }
@@ -259,14 +257,12 @@
         vid.play().catch(() => {});
       }
     }
+    layer.style.background = `rgb(${overlayRgb})`;
     if (vid) {
       vid.style.objectPosition = bgPosition;
+      vid.style.opacity = String(Math.max(0, Math.min(1, 1 - overlayAlpha)).toFixed(4));
     }
-    const scrim = layer.querySelector('#agy-custom-theme-video-scrim');
-    if (scrim) {
-      scrim.style.background = `linear-gradient(180deg, rgba(${overlayRgb}, ${overlayAlpha}) 0%, rgba(${overlayRgb}, ${overlayAlpha}) 100%)`;
-    }
-    syncEyeTrackingRig(st, mainTheme, layer, vid);
+    syncEyeTrackingRig(st, mainTheme, layer, vid, overlayRgb, overlayAlpha);
   }
 
   const MOUTH_REF_PROF = [183,182,182,181,181,181,181,182,182,182,184,184,187,189,193,194,199,204,209,210,214,216,219,221,222,218,199,207,214,215,218,220,222,225,226,227,226,227,227,226,225,227,230,231,235,235,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236,236];
@@ -1407,7 +1403,7 @@
       const rect = c.getBoundingClientRect();
       if (c.dataset.drawnOnce === '1' && (rect.width <= 0 || rect.bottom < -36 || rect.top > vh + 36)) return;
       c.dataset.drawnOnce = '1';
-      const ctx = c.getContext('2d');
+      const ctx = c.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       const cw = Number(c.dataset.wCss) || 120;
       const ch = Number(c.dataset.hCss) || 56;
@@ -1440,7 +1436,7 @@
       const rect = c.getBoundingClientRect();
       if (c.dataset.drawnOnce === '1' && (rect.width <= 0 || rect.bottom < -36 || rect.top > vh + 36)) return;
       c.dataset.drawnOnce = '1';
-      const ctx = c.getContext('2d');
+      const ctx = c.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       const cw = Number(c.dataset.wCss) || 150;
       const ch = Number(c.dataset.hCss) || 84;
@@ -1544,7 +1540,7 @@
     // 3B-1: Top Header Horizon Seam
     const hdrC = document.getElementById('agy-vfx-3b1-header');
     if (hdrC && !(staticOnly && hdrC.dataset.drawnOnce === '1')) {
-      const ctx = hdrC.getContext('2d');
+      const ctx = hdrC.getContext('2d', { willReadFrequently: true });
       if (ctx) {
         hdrC.dataset.drawnOnce = '1';
         const cw = Number(hdrC.dataset.wCss) || 800;
@@ -1601,7 +1597,7 @@
       const rect = c.getBoundingClientRect();
       if (c.dataset.drawnOnce === '1' && (rect.width <= 0 || rect.bottom < -24 || rect.top > vh + 24)) return;
       c.dataset.drawnOnce = '1';
-      const ctx = c.getContext('2d');
+      const ctx = c.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       const cw = Number(c.dataset.wCss) || 320;
       const ch = Number(c.dataset.hCss) || 28;
@@ -1739,7 +1735,7 @@
 
     const drawBoilingCorner = (canv, isTR) => {
       if (staticOnly && canv.dataset.drawnOnce === '1') return;
-      const cctx = canv.getContext('2d');
+      const cctx = canv.getContext('2d', { willReadFrequently: true });
       if (!cctx) return;
       canv.dataset.drawnOnce = '1';
       cctx.save();
@@ -1934,7 +1930,7 @@
           if (staticOnly && c.dataset.drawnOnce === '1') return;
           const rect = c.getBoundingClientRect();
           if (!staticOnly && c.dataset.drawnOnce === '1' && (rect.width <= 0 || rect.bottom < -36 || rect.top > vh + 36)) return;
-          const ctx = c.getContext('2d');
+          const ctx = c.getContext('2d', { willReadFrequently: true });
           if (!ctx) return;
           c.dataset.drawnOnce = '1';
 
@@ -2077,7 +2073,7 @@
     startUltraAvLoop();
   }
 
-  function syncEyeTrackingRig(st, mainTheme, layer, vid) {
+  function syncEyeTrackingRig(st, mainTheme, layer, vid, overlayRgb, overlayAlpha) {
     const eyeCanvas = layer ? layer.querySelector('#agy-custom-theme-eye-canvas') : null;
     if (st.performanceMode === 'lite' || !eyeCanvas || !vid || !st.wpEnabled || st.customWp || !mainTheme.eyeTracking || !mainTheme.eyeScleraMask) {
       stopEyeTrackingRig(st.performanceMode !== 'lite');
@@ -2111,27 +2107,36 @@
       scoreBuf: null,
       lastVidTime: -1,
       lastNBright: 48,
-      lastYLash: 73.0
+      lastYLash: 73.0,
+      overlayRgb: '6, 7, 10',
+      overlayAlpha: 0
     };
     const est = window.__AGY_EYE_STATE__;
+    est.overlayRgb = overlayRgb || mainTheme.overlayRgb || '6, 7, 10';
+    est.overlayAlpha = Number.isFinite(overlayAlpha) ? overlayAlpha : 0;
     if (!est.profBuf) est.profBuf = new Float32Array(105);
     if (!est.scoreBuf) est.scoreBuf = new Float32Array(21);
     est.lastVidTime = -1;
 
-    const newKey = `v16|${st.themeName}|${(mainTheme.eyeScleraMask || '').length}|${(mainTheme.eyeIrisLeft || '').length}|${(mainTheme.eyeBlinkMask || '').length}`;
+    const scleraUrl = resolveAssetUrl(mainTheme.eyeScleraMask);
+    const irisLUrl = resolveAssetUrl(mainTheme.eyeIrisLeft);
+    const irisRUrl = resolveAssetUrl(mainTheme.eyeIrisRight);
+    const blinkUrl = resolveAssetUrl(mainTheme.eyeBlinkMask);
+    const newKey = `v17|${st.themeName}|${scleraUrl}|${irisLUrl}|${blinkUrl}`;
     if (est.cacheKey !== newKey) {
       est.cacheKey = newKey;
       const loadImg = (src) => {
         if (!src) return null;
         const im = new Image();
+        if (!/^data:/i.test(src)) im.crossOrigin = 'anonymous';
         im.onload = () => { if (est.renderOnce) est.renderOnce(); };
         im.src = src;
         return im;
       };
-      est.scleraImg = loadImg(mainTheme.eyeScleraMask);
-      est.irisLImg = loadImg(mainTheme.eyeIrisLeft);
-      est.irisRImg = loadImg(mainTheme.eyeIrisRight);
-      est.blinkImg = loadImg(mainTheme.eyeBlinkMask);
+      est.scleraImg = loadImg(scleraUrl);
+      est.irisLImg = loadImg(irisLUrl);
+      est.irisRImg = loadImg(irisRUrl);
+      est.blinkImg = loadImg(blinkUrl);
     }
 
     if (!est.detCanvas || est.detCanvas.height !== 200) {
@@ -2516,6 +2521,12 @@
             ctx.drawImage(est.blinkImg, 0, y0, 1370, 290);
           }
 
+          if (est.overlayAlpha > 0.001) {
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.fillStyle = `rgba(${est.overlayRgb || '6, 7, 10'}, ${est.overlayAlpha})`;
+            ctx.fillRect(0, 0, 1370, 330);
+          }
+
           ctx.restore();
         }
       }
@@ -2645,12 +2656,6 @@
       .agy-shell[data-agy-video-ready="1"] {
         background-image: linear-gradient(180deg, #06070a 0%, #06070a 100%) !important;
       }
-        image-rendering: auto !important;
-      }
-      /* Keep transparent scrollers on GPU composited-scrolling layers */
-      .agy-shell .overflow-y-auto {
-        will-change: scroll-position;
-      }
       .agy-sheet,
       .agy-inset-shell,
       .browser-hole-opaque,
@@ -2677,7 +2682,6 @@
         background-position: ${bgPosition};
         background-repeat: no-repeat;
         clip-path: var(--agy-hole-clip, none);
-        will-change: transform;
       }
       body[data-has-browser-hole="true"] .agy-shell[data-agy-hole-active="1"] > :not([data-has-browser-hole="true"]):not([data-browser-hole]:not([data-browser-hole="false"])):not(.settings-modal-container),
       body[data-has-browser-hole="true"] .agy-shell[data-agy-hole-active="1"] .browser-hole-opaque:not([data-has-browser-hole="true"]),
@@ -2710,18 +2714,9 @@
         height: 100% !important;
         object-fit: cover !important;
         display: block !important;
-        filter: contrast(1.06) url(#agy-4k-sharpen) !important;
-        transform: translateZ(0) !important;
       }
       #agy-custom-theme-eye-canvas {
         position: absolute !important;
-        pointer-events: none !important;
-        filter: contrast(1.06) url(#agy-4k-sharpen) !important;
-        transform: translateZ(0) !important;
-      }
-      #agy-custom-theme-video-scrim {
-        position: absolute !important;
-        inset: 0 !important;
         pointer-events: none !important;
       }
       body[data-has-browser-hole="true"] .agy-shell[data-agy-hole-active="1"] #agy-custom-theme-video-layer {
@@ -3077,29 +3072,17 @@
       syncPrebakedGlass(null);
     }
 
+    const sidePanelBgColor = mainTheme.aiCardBg || `rgba(${overlayRgb}, 0.72)`;
     const sidePanelCss = st.wpEnabled ? `
       /* Frosted pre-baked glass + dark/light reading scrim for right-side Artifact / Text / Diff split panels */
-      ${useUnifiedGlass ? `
-      .agy-shell[data-agy-side-glass="1"]::before {
-        clip-path: polygon(
-          evenodd,
-          0 0,
-          100% 0,
-          100% var(--agy-hdr-h, 75px),
-          var(--agy-sidebar-w, 256px) var(--agy-hdr-h, 75px),
-          var(--agy-sidebar-w, 256px) 100%,
-          0 100%,
-          0 0,
-          var(--agy-side-l, 100%) var(--agy-side-t, 75px),
-          var(--agy-side-r, 100%) var(--agy-side-t, 75px),
-          var(--agy-side-r, 100%) var(--agy-side-b, 100%),
-          var(--agy-side-l, 100%) var(--agy-side-b, 100%),
-          var(--agy-side-l, 100%) var(--agy-side-t, 75px)
-        ) !important;
-      }
-      ` : ''}
       body:not([data-has-browser-hole="true"]) .agy-shell [data-side-panel-body="true"]:not([data-has-browser-hole="true"]):not(:has([data-browser-hole]:not([data-browser-hole="false"]))) {
-        background: ${mainTheme.aiCardBg || `rgba(${overlayRgb}, 0.72)`} !important;
+        background-color: ${sidePanelBgColor} !important;
+        ${useUnifiedGlass ? `
+        background-image: linear-gradient(180deg, ${sidePanelBgColor}, ${sidePanelBgColor}), var(--agy-l-glass-bg, none) !important;
+        background-size: 100% 100%, var(--agy-glass-w, 100vw) var(--agy-glass-h, 100vh) !important;
+        background-position: 0 0, calc(var(--agy-glass-x, 0px) - var(--agy-side-l, 0px)) calc(var(--agy-glass-y, 0px) - var(--agy-side-t, 0px)) !important;
+        background-repeat: no-repeat !important;
+        ` : ''}
         ${isLight ? `color: ${uiInk} !important;` : ''}
         backdrop-filter: none !important;
         border-left: 1px solid ${mainTheme.aiCardBorder || (isLight ? 'rgba(15, 23, 42, 0.14)' : 'rgba(255, 255, 255, 0.14)')} !important;
@@ -3133,24 +3116,48 @@
       .agy-shell::before {
         content: "";
         position: absolute;
-        inset: 0;
+        top: var(--agy-hdr-h, 75px);
+        left: 0;
+        width: var(--agy-sidebar-w, 256px);
+        bottom: 0;
         z-index: 1;
         pointer-events: none;
         background-color: ${mainTheme.headerBg};
         background-image: var(--agy-l-glass-bg, none);
-        background-size: cover;
-        background-position: ${bgPosition};
+        background-size: var(--agy-glass-w, 100vw) var(--agy-glass-h, 100vh);
+        background-position: var(--agy-glass-x, 0px) calc(var(--agy-glass-y, 0px) - var(--agy-hdr-h, 75px));
         background-repeat: no-repeat;
         backdrop-filter: none !important;
-        will-change: transform;
-        clip-path: polygon(
-          0 0,
-          100% 0,
-          100% var(--agy-hdr-h, 75px),
-          var(--agy-sidebar-w, 256px) var(--agy-hdr-h, 75px),
-          var(--agy-sidebar-w, 256px) 100%,
-          0 100%
-        );
+      }
+      .agy-shell:not([data-agy-hole-active="1"])::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: var(--agy-hdr-h, 75px);
+        z-index: 1;
+        pointer-events: none;
+        background-color: ${mainTheme.headerBg};
+        background-image: var(--agy-l-glass-bg, none);
+        background-size: var(--agy-glass-w, 100vw) var(--agy-glass-h, 100vh);
+        background-position: var(--agy-glass-x, 0px) var(--agy-glass-y, 0px);
+        background-repeat: no-repeat;
+        backdrop-filter: none !important;
+      }
+      body[data-has-browser-hole="true"] .agy-shell[data-agy-hole-active="1"] > div:first-of-type {
+        background-color: ${mainTheme.headerBg} !important;
+        background-image: var(--agy-l-glass-bg, none) !important;
+        background-size: var(--agy-glass-w, 100vw) var(--agy-glass-h, 100vh) !important;
+        background-position: var(--agy-glass-x, 0px) var(--agy-glass-y, 0px) !important;
+        background-repeat: no-repeat !important;
+      }
+      body[data-has-browser-hole="true"] .agy-shell[data-agy-hole-active="1"] [class*="@container/titlebar"] {
+        background-color: ${mainTheme.headerBg} !important;
+        background-image: var(--agy-l-glass-bg, none) !important;
+        background-size: var(--agy-glass-w, 100vw) var(--agy-glass-h, 100vh) !important;
+        background-position: calc(var(--agy-glass-x, 0px) - var(--agy-sidebar-w, 256px)) calc(var(--agy-glass-y, 0px) - 35px) !important;
+        background-repeat: no-repeat !important;
       }
       .agy-shell [class*="@container/titlebar"] {
         background: transparent !important;
@@ -3241,7 +3248,6 @@
         position: relative !important;
         z-index: 2 !important;
         transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), color 0.18s ease !important;
-        will-change: transform !important;
       }
       .agy-shell .agy-sidebar-row.bg-sidebar-secondary,
       .agy-shell .agy-sidebar-row[data-agy-vfx-sb-host="1"],
@@ -4052,8 +4058,8 @@
       });
       syncPerfCards(DEFAULT_PERF_MODE);
       const defTh = THEMES[DEFAULT_THEME_KEY] || {};
-      syncAvPreview(userAvPreview, defTh.userAvatar || '', 'U');
-      syncAvPreview(agentAvPreview, defTh.agentAvatar || '', 'AI');
+      syncAvPreview(userAvPreview, resolveAssetUrl(defTh.userAvatar || ''), 'U');
+      syncAvPreview(agentAvPreview, resolveAssetUrl(defTh.agentAvatar || ''), 'AI');
       if (userAvPreview) userAvPreview.style.borderRadius = '50%';
       if (agentAvPreview) agentAvPreview.style.borderRadius = '50%';
       if (slider) slider.value = 69;
@@ -4236,6 +4242,25 @@
     const hdrBottom = titleBar ? Math.round(titleBar.getBoundingClientRect().bottom - shellRect.top) : 35;
     shell.style.setProperty('--agy-sidebar-w', sw + 'px');
     shell.style.setProperty('--agy-hdr-h', hdrBottom + 'px');
+
+    const shellW = Math.max(1, shellRect.width);
+    const shellH = Math.max(1, shellRect.height);
+    const imgAspect = window.__AGY_GLASS_ASPECT__ || (16 / 9);
+    let glassW = shellW;
+    let glassH = shellH;
+    if (shellW / shellH > imgAspect) {
+      glassW = shellW;
+      glassH = shellW / imgAspect;
+    } else {
+      glassH = shellH;
+      glassW = shellH * imgAspect;
+    }
+    const glassX = (shellW - glassW) * 0.5;
+    const glassY = (shellH - glassH) * 0.5;
+    shell.style.setProperty('--agy-glass-w', glassW.toFixed(2) + 'px');
+    shell.style.setProperty('--agy-glass-h', glassH.toFixed(2) + 'px');
+    shell.style.setProperty('--agy-glass-x', glassX.toFixed(2) + 'px');
+    shell.style.setProperty('--agy-glass-y', glassY.toFixed(2) + 'px');
 
     const hasHoleAttr = document.body.getAttribute('data-has-browser-hole') === 'true';
     const holeEl = hasHoleAttr ? shell.querySelector('[data-browser-hole]:not([data-browser-hole="false"])') : null;
@@ -4610,6 +4635,7 @@
   if (staleIosPill) staleIosPill.remove();
   const staleSbVfx = document.getElementById('agy-vfx-2f-sidebar');
   if (staleSbVfx) staleSbVfx.remove();
+  document.querySelectorAll('.agy-avatar-vfx-canvas, .agy-ui-vfx-canvas, #agy-katana-tr-canvas, #agy-katana-bl-canvas').forEach(el => el.remove());
   if (window.__AGY_AV_VFX__) {
     window.__AGY_AV_VFX__.sbLastTargetKey = '';
     window.__AGY_AV_VFX__.sbTransitionUntil = 0;

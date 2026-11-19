@@ -65,7 +65,7 @@ def write_windows_launchers(target_dir: Path, profile: str) -> None:
     uninstall_bat = (
         "@echo off\r\n"
         "cd /d \"%~dp0\"\r\n"
-        "node \"%~dp0scripts\\uninstall.js\"\r\n"
+        "powershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0scripts\\uninstall-win.ps1\"\r\n"
         "echo.\r\n"
         "pause\r\n"
     )

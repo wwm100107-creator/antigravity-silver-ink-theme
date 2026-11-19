@@ -131,7 +131,7 @@ function startAssetServer() {
     return new Promise((resolve) => {
         const srv = http.createServer((req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Cache-Control', 'public, max-age=3600');
+            res.setHeader('Cache-Control', 'no-store');
             if (req.method === 'OPTIONS') {
                 res.writeHead(204);
                 res.end();

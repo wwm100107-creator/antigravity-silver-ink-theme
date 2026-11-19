@@ -17,16 +17,18 @@ import urllib.parse
 from pathlib import Path
 
 WALLPAPER_KEYS = ("wallpaper", "liteWallpaper")
-INLINE_ASSET_KEYS = (
-    "sticker",
-    "cornerSvg",
-    "composerCornerSvg",
+LAZY_RASTER_KEYS = (
     "userAvatar",
     "agentAvatar",
     "eyeScleraMask",
     "eyeIrisLeft",
     "eyeIrisRight",
     "eyeBlinkMask",
+)
+INLINE_ASSET_KEYS = (
+    "sticker",
+    "cornerSvg",
+    "composerCornerSvg",
 )
 LITE_STRIP_KEYS = (
     "videoWallpaper",
@@ -176,10 +178,19 @@ def build_payload(
                 else:
                     copied[key] = validate_wallpaper_value(copied[key], themes_dir)
 
+        for key in LAZY_RASTER_KEYS:
+            if key in copied:
+                val = copied[key]
+                is_svg = isinstance(val, str) and val.strip().lower().endswith(".svg")
+                if inline_wallpapers or is_svg:
+                    target_dim = min(max_dim, AVATAR_MAX_DIM) if key in AVATAR_KEYS else max_dim
+                    copied[key] = resolve_asset_value(val, themes_dir, target_dim)
+                else:
+                    copied[key] = validate_wallpaper_value(val, themes_dir)
+
         for key in INLINE_ASSET_KEYS:
             if key in copied:
-                target_dim = min(max_dim, AVATAR_MAX_DIM) if key in AVATAR_KEYS else max_dim
-                copied[key] = resolve_asset_value(copied[key], themes_dir, target_dim)
+                copied[key] = resolve_asset_value(copied[key], themes_dir, max_dim)
         resolved_themes[name] = copied
 
     engine_src = engine_path.read_text(encoding="utf-8")
